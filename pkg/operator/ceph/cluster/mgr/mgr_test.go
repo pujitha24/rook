@@ -567,6 +567,7 @@ func TestCluster_configurePrometheusModule(t *testing.T) {
 	configSettings := map[string]string{}
 	lastModuleConfigured := ""
 	modulesGetOutput := ""
+	getOverrides := map[string]string{}
 	executor := &exectest.MockExecutor{
 		MockExecuteCommandWithOutput: func(command string, args ...string) (string, error) {
 			logger.Infof("Command: %s %v", command, args)
@@ -588,6 +589,9 @@ func TestCluster_configurePrometheusModule(t *testing.T) {
 				configSettings[args[3]] = args[4]
 			}
 			if args[0] == "config" && args[1] == "get" && args[2] == "mgr" {
+				if v, ok := getOverrides[args[3]]; ok {
+					return v, nil
+				}
 				return modulesGetOutput, nil
 			}
 			return "", nil
@@ -634,7 +638,7 @@ func TestCluster_configurePrometheusModule(t *testing.T) {
 	c.spec.Monitoring.Interval = &metav1.Duration{
 		Duration: 30 * time.Second,
 	}
-	modulesGetOutput = "30"
+	modulesGetOutput = "30.000000"
 	configSettings = make(map[string]string)
 	err = c.configurePrometheusModule()
 	assert.NoError(t, err)
@@ -655,7 +659,17 @@ func TestCluster_configurePrometheusModule(t *testing.T) {
 	assert.Equal(t, 2, modulesEnabled)
 	assert.Equal(t, 1, modulesDisabled)
 	assert.Equal(t, "30002", configSettings["mgr/prometheus/server_port"])
-	assert.Equal(t, "60", configSettings["mgr/prometheus/scrape_interval"])
+	assert.Equal(t, "60.000000", configSettings["mgr/prometheus/scrape_interval"])
+
+	// Ceph stores the float option as "60.000000", so an unchanged interval must not restart the module
+	modulesEnabled = 0
+	modulesDisabled = 0
+	getOverrides["mgr/prometheus/server_port"] = "30002"
+	getOverrides["mgr/prometheus/scrape_interval"] = "60.000000"
+	err = c.configurePrometheusModule()
+	assert.NoError(t, err)
+	assert.Equal(t, 1, modulesEnabled) // the unconditional enable, no restart
+	assert.Equal(t, 0, modulesDisabled)
 }
 
 func TestMgrKeyRotation(t *testing.T) {
