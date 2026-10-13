@@ -47,6 +47,13 @@ func TestGetMinimumFailureDomain(t *testing.T) {
 
 	assert.Equal(t, "host", getMinimumFailureDomain(poolList))
 
+	// region is the highest level and must still be matched
+	poolList = []cephv1.PoolSpec{
+		{FailureDomain: "region"},
+	}
+
+	assert.Equal(t, "region", getMinimumFailureDomain(poolList))
+
 	// test default
 	poolList = []cephv1.PoolSpec{
 		{FailureDomain: "aaa"},
